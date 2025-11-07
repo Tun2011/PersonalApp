@@ -64,7 +64,7 @@ if not api_key:
 try:
     genai.configure(api_key=api_key)
     # Sử dụng model bạn đã chọn
-    model = genai.GenerativeModel('gemini-1.5-flash-latest') 
+    model = genai.GenerativeModel('gemini-flash-latest') 
     st.sidebar.success("Đã kết nối với API Key!")
 except Exception as e:
     st.sidebar.error(f"Lỗi kết nối API: {e}")
