@@ -7,7 +7,6 @@ import time
 try:
     from PyPDF2 import PdfReader
 except ImportError:
-    # Nếu chạy local mà chưa cài, có thể báo lỗi
     print("Vui lòng cài PyPDF2: py -m pip install PyPDF2")
 
 # --- 2. Cấu hình trang (Phải là lệnh đầu tiên của Streamlit) ---
@@ -19,14 +18,12 @@ st.set_page_config(
 
 # --- 3. Các hàm trợ giúp ---
 
-# Hàm hiển thị hiệu ứng gõ máy
 def stream_response(response_text):
     """Hiển thị văn bản với hiệu ứng gõ máy."""
     for word in response_text.split():
         yield word + " "
         time.sleep(0.05)
 
-# Hàm trích xuất text từ tệp PDF
 def get_pdf_text(pdf_docs_list):
     """Trích xuất văn bản từ danh sách các tệp PDF được tải lên."""
     text = ""
@@ -41,33 +38,37 @@ def get_pdf_text(pdf_docs_list):
             st.error(f"Lỗi khi đọc tệp PDF: {e}")
     return text
 
-# --- 4. Cấu hình API và Model (Sử dụng Secrets) ---
+# --- 4. Giao diện Thanh bên (Sidebar) ---
+st.sidebar.title("Cấu hình & Chức năng ⚙️")
+
+# <--- ĐÂY LÀ CODE CŨ ĐÃ KHÔI PHỤC ---
+# Yêu cầu API Key ở thanh bên
+api_key = st.sidebar.text_input("Nhập Google API Key của bạn:", type="password")
+
+# Chọn chức năng
+app_mode = st.sidebar.selectbox("Chọn chức năng bạn muốn:",
+                                ["Trang chủ", "Dịch thuật & Code 📚", "Viết code (Đơn giản) 💻"])
+
+
+# --- 5. Cấu hình API và Model ---
 
 # Đặt tiêu đề chính
 st.title("Trợ lý AI Tự động hóa 🚀")
 
-# Lấy API key từ Streamlit Secrets
-api_key = st.secrets.get("GOOGLE_API_KEY")
-
+# Kiểm tra API Key (được nhập từ sidebar)
 if not api_key:
-    st.error("LỖI: Không tìm thấy 'GOOGLE_API_KEY' trong Streamlit Secrets!")
-    st.info("Vui lòng vào Manage app -> Settings -> Secrets và thêm API key của bạn.")
-    st.stop() # Dừng ứng dụng nếu không có key
+    st.warning("Vui lòng nhập API Key của bạn vào thanh bên trái để bắt đầu.")
+    st.stop() # Dừng thực thi nếu chưa có key
 
 # Cấu hình model
 try:
     genai.configure(api_key=api_key)
-    # Thay 'gemini-pro' bằng tên model bạn đã tìm được nếu nó khác
-    model = genai.GenerativeModel('gemini-flash-latest')
-    st.sidebar.success("Đã kết nối với Google AI!")
+    # Sử dụng model bạn đã chọn
+    model = genai.GenerativeModel('gemini-1.5-flash-latest') 
+    st.sidebar.success("Đã kết nối với API Key!")
 except Exception as e:
     st.sidebar.error(f"Lỗi kết nối API: {e}")
     st.stop()
-
-# --- 5. Giao diện Thanh bên (Sidebar) ---
-st.sidebar.title("Chức năng ⚙️")
-app_mode = st.sidebar.selectbox("Chọn chức năng bạn muốn:",
-                                ["Trang chủ", "Dịch thuật & Code 📚", "Viết code (Đơn giản) 💻"])
 
 # --- 6. Logic xử lý cho từng trang ---
 
@@ -75,20 +76,18 @@ app_mode = st.sidebar.selectbox("Chọn chức năng bạn muốn:",
 if app_mode == "Trang chủ":
     st.header("Chào mừng đến với Trợ lý AI của bạn.")
     st.write("Hãy chọn một chức năng ở thanh bên trái để bắt đầu.")
-    st.image("https://streamlit.io/images/brand/streamlit-logo-primary-colormark-darktext.png", width=400)
+    st.image("https.streamlit.io/images/brand/streamlit-logo-primary-colormark-darktext.png", width=400)
 
 # --- Chức năng Dịch thuật & Code (Nâng cao) ---
 elif app_mode == "Dịch thuật & Code 📚":
     st.header("Chức năng Dịch thuật (Văn bản & PDF)")
     st.write("Bạn có thể dịch văn bản gõ tay HOẶC tải lên tệp PDF.")
 
-    # Khởi tạo các biến "bộ nhớ" (session state)
     if "pdf_translated" not in st.session_state:
         st.session_state.pdf_translated = False
     if "original_pdf_text" not in st.session_state:
         st.session_state.original_pdf_text = ""
 
-    # --- Khu vực nhập liệu ---
     col1, col2 = st.columns(2)
     with col1:
         text_to_translate = st.text_area("Nhập văn bản cần dịch:", height=200)
@@ -97,61 +96,51 @@ elif app_mode == "Dịch thuật & Code 📚":
     
     target_language = st.text_input("Dịch sang ngôn ngữ:", "Tiếng Việt")
 
-    # --- Nút Dịch ---
     if st.button("Bắt đầu dịch"):
-        # Reset "bộ nhớ" mỗi khi bấm nút
         st.session_state.pdf_translated = False
         st.session_state.original_pdf_text = ""
         
         input_text_for_translation = ""
         is_pdf_upload = False
 
-        # 1. Ưu tiên tệp PDF
         if uploaded_pdf is not None:
             with st.spinner("Đang đọc tệp PDF..."):
-                raw_text = get_pdf_text([uploaded_pdf]) # Hàm này nhận 1 danh sách
+                raw_text = get_pdf_text([uploaded_pdf])
             
             if not raw_text:
                 st.error("Không thể trích xuất văn bản từ tệp PDF này. Tệp có thể là hình ảnh.")
                 st.stop()
                 
             input_text_for_translation = raw_text
-            st.session_state.original_pdf_text = raw_text # <-- Lưu text GỐC vào bộ nhớ
-            is_pdf_upload = True # Đánh dấu đây là bản dịch từ PDF
+            st.session_state.original_pdf_text = raw_text
+            is_pdf_upload = True
         
-        # 2. Nếu không có PDF, dùng văn bản gõ tay
         elif text_to_translate:
             input_text_for_translation = text_to_translate
         
-        # 3. Nếu không có cả hai
         else:
             st.warning("Vui lòng nhập văn bản hoặc tải lên tệp PDF.")
             st.stop()
 
-        # Bắt đầu gọi API để dịch
         with st.spinner(f"Đang dịch sang {target_language}..."):
             prompt = f"Dịch văn bản sau đây sang {target_language}. Chỉ trả về kết quả đã dịch, không thêm giải thích: \n\n{input_text_for_translation}"
             try:
                 response = model.generate_content(prompt)
                 st.subheader("Kết quả dịch:")
-                st.write_stream(stream_response(response.text)) # Hiệu ứng gõ máy
+                st.write_stream(stream_response(response.text))
                 
-                # KÍCH HOẠT NÚT THỨ 2 NẾU LÀ PDF
                 if is_pdf_upload:
-                    st.session_state.pdf_translated = True # Đặt cờ
+                    st.session_state.pdf_translated = True
                     
             except Exception as e:
                 st.error(f"Có lỗi xảy ra khi dịch: {e}")
 
-    # --- KHU VỰC NÚT THỨ 2 (VIẾT CODE) ---
-    # Nút này CHỈ xuất hiện nếu "bộ nhớ" (session_state) được kích hoạt
     if st.session_state.get("pdf_translated", False):
         st.divider()
         st.subheader("Tác vụ tiếp theo 🚀")
         st.write("AI đã ghi nhớ nội dung tệp PDF gốc bạn vừa tải lên.")
         
         if st.button("Bạn có muốn viết code theo yêu cầu của file PDF này không?"):
-            # Lấy text GỐC từ "bộ nhớ"
             original_text = st.session_state.original_pdf_text
             
             with st.spinner("Đang phân tích PDF và viết code..."):
@@ -167,7 +156,6 @@ elif app_mode == "Dịch thuật & Code 📚":
                 try:
                     code_response = model.generate_content(code_prompt)
                     st.subheader("Code được tạo từ PDF:")
-                    # Dùng st.code() để hiển thị code đẹp hơn
                     st.code(code_response.text) 
                 except Exception as e:
                     st.error(f"Có lỗi xảy ra khi tạo code: {e}")
